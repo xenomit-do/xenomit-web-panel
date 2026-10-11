@@ -1,0 +1,36 @@
+# VCS and CI
+.git
+.github
+.gitignore
+
+# Dependencies and build output (rebuilt in image)
+node_modules
+.next
+dist
+build
+coverage
+tsconfig.tsbuildinfo
+
+# Local env and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Dev databases and machine-local state
+*.db
+*.db-journal
+mock-agent/tokens.json
+.orchestrator-dev.json
+.smoke-token.txt
+/target*/
+/.xenomit-assets/
+/asset-catalog/
+/runtime/
+
+# Tests and local tooling (not needed for production image)
+tests
+vitest.config.ts
+docker-compose.yml
+README.md
+.env.example
