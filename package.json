@@ -1,0 +1,43 @@
+{
+  "name": "xenomit-web-panel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "build": "next build",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "mock": "tsx mock-agent/index.ts",
+    "mock:orch": "tsx mock-orchestrator/index.ts",
+    "db:generate:pg": "prisma generate --schema prisma/postgres/schema.prisma",
+    "db:migrate:pg": "prisma migrate dev --schema prisma/postgres/schema.prisma",
+    "db:deploy:pg": "prisma migrate deploy --schema prisma/postgres/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "6.5.0",
+    "next": "16.3.8",
+    "next-auth": "5.0.0-beta.32",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-is": "^19.2.0",
+    "recharts": "3.2.1",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.4",
+    "@types/node": "22.15.0",
+    "@types/react": "19.1.0",
+    "@types/react-dom": "19.1.0",
+    "@types/ws": "8.18.0",
+    "cross-env": "7.0.3",
+    "prisma": "6.5.0",
+    "tailwindcss": "4.1.4",
+    "tsx": "4.23.15",
+    "typescript": "5.8.3",
+    "vitest": "4.1.11"
+  }
+}
