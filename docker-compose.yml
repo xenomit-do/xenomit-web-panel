@@ -1,0 +1,37 @@
+# Production-ish stack. The app itself runs with zero services on SQLite
+# (npm run dev); this compose file provides Postgres + Redis for a real
+# deployment. When switching to Postgres, change prisma/schema.prisma
+# `provider = "sqlite"` -> "postgresql" and point DATABASE_URL here.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: xenomit
+      POSTGRES_PASSWORD: xenomit
+      POSTGRES_DB: xenomit
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # Reserved for the multi-node pub/sub bus (see src/server/hub.ts —
+    # the broadcast boundary is already isolated for a Redis adapter).
+
+  # web:
+  #   build: .
+  #   environment:
+  #     DATABASE_URL: postgresql://xenomit:xenomit@db:5432/xenomit
+  #     AUTH_SECRET: ${AUTH_SECRET}
+  #     AUTH_DISCORD_ID: ${AUTH_DISCORD_ID}
+  #     AUTH_DISCORD_SECRET: ${AUTH_DISCORD_SECRET}
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on: [db]
+
+volumes:
+  pgdata:

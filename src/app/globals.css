@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0e17;
+  --panel: #101624;
+  --panel-2: #151d30;
+  --border: #232d47;
+  --text: #dbe4f5;
+  --muted: #7d8aa8;
+  --accent: #4fc3f7;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #2a3550; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.muted { color: var(--muted); }
+
+.btn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: filter .12s;
+}
+.btn:hover { filter: brightness(1.2); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: #1565c0; border-color: #1565c0; color: #fff; }
+.btn-green { background: #1b7a3d; border-color: #1b7a3d; color: #fff; }
+.btn-red { background: #8e2f2f; border-color: #8e2f2f; color: #fff; }
+
+.input {
+  background: #0c1220;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+}
+.input:focus { border-color: var(--accent); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.badge-on { background: rgba(46, 160, 67, .18); color: #5fd97f; }
+.badge-off { background: rgba(255, 255, 255, .08); color: #93a0b8; }

@@ -1,0 +1,156 @@
+// Xenomit Panel data model — Postgres variant for production/managed fleets.
+// Kept identical to ../schema.prisma (SQLite dev) except for the datasource
+// block; tests/schema-parity.test.ts asserts the model sections stay in sync.
+// Migrate with:  npx prisma migrate deploy --schema prisma/postgres/schema.prisma
+//                DATABASE_URL=postgresql://user:pass@host:5432/xenomit
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(cuid())
+  discordId     String        @unique
+  username      String
+  avatar        String?
+  plan          String        @default("free")
+  instanceLimit Int           @default(8)
+  role          String        @default("user") // "user" | "admin" — read per request
+  status        String        @default("active") // "invited" | "active" | "suspended"
+  createdAt     DateTime      @default(now())
+  instances     Instance[]
+  pairingCodes  PairingCode[]
+  auditLogs     AuditLog[]
+  invitesCreated Invite[]     @relation("InviteCreator")
+  invitesUsed    Invite[]     @relation("InviteUsedBy")
+}
+
+model Instance {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server      String          @default("")
+  gameUserId  String          @default("")
+  username    String          @default("")
+  nickname    String?
+  tokenHash   String          @unique
+  kind        String          @default("paired") // "paired" | "managed"
+  botId       String?         @unique // orchestrator XenomitBot name (managed)
+  desiredState String?                            // Running | Paused | Stopped (cache)
+  phase       String?                             // lifecycle phase (cache, from SSE)
+  phaseDetail Json?                               // NeedsHuman reason, restore quality, …
+  version     String?
+  createdAt   DateTime        @default(now())
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+  state       InstanceState?
+  statEvents  StatEvent[]
+  catalog     ModuleCatalog?
+  configs     Config[]
+  commands    Command[]
+  auditLogs   AuditLog[]
+
+  @@index([userId])
+}
+
+model InstanceState {
+  instanceId   String   @id
+  instance     Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  latestStatus Json?
+  latestFrame  Json?
+  latestCatalog Json?
+  updatedAt    DateTime @updatedAt
+}
+
+model StatEvent {
+  id         String   @id @default(cuid())
+  instanceId String
+  instance   Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  at         DateTime
+  seq        BigInt? // per-instance monotonic, for idempotent replay (NULL = legacy)
+  source     String   @default("")
+  message    String?
+  rewards    Json // number[4]: credits, uridium, honor, experience
+  balances   Json // number[4]
+  @@unique([instanceId, seq])
+  @@index([instanceId, at])
+}
+
+model ModuleCatalog {
+  instanceId  String   @id
+  instance    Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  descriptors Json // ModuleDescriptor[]
+  updatedAt   DateTime @updatedAt
+}
+
+model Config {
+  id         String   @id @default(cuid())
+  instanceId String
+  instance   Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  moduleId   String
+  settings   Json
+  updatedAt  DateTime @updatedAt
+  @@unique([instanceId, moduleId])
+}
+
+model Command {
+  id         String    @id @default(cuid())
+  instanceId String
+  instance   Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  userId     String?
+  action     String
+  payload    Json?
+  status     String    @default("pending") // pending | ok | error | timeout | offline
+  result     Json?
+  error      String?
+  createdAt  DateTime  @default(now())
+  answeredAt DateTime?
+  @@index([instanceId, createdAt])
+}
+
+model PairingCode {
+  id         String    @id @default(cuid())
+  codeHash   String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instanceId String?   // set when re-pairing an existing instance
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// Invite-only access (docs/08 §8.3a). An invite is either a single-use code
+// (codeHash set) or a pre-approved Discord ID (discordId set) — or both: a
+// code invite may optionally be bound to a specific Discord ID at creation.
+model Invite {
+  id              String    @id @default(cuid())
+  codeHash        String?   @unique // sha256 of the single-use code
+  discordId       String?   // pre-approved Discord account id
+  note            String?
+  createdById     String
+  createdBy       User      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  usedById        String?
+  usedBy          User?     @relation("InviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+  usedByDiscordId String?   // set when the invite is consumed at login time
+  usedAt          DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  @@index([discordId])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instanceId String?
+  instance   Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  action     String
+  meta       Json?
+  at         DateTime  @default(now())
+  @@index([userId, at])
+}
