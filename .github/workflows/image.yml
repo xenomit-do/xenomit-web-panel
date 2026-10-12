@@ -1,0 +1,112 @@
+# Build, sign, and publish ghcr.io/xenomit-do/xenomit-web-panel, then notify
+# xenomit-deployments via a narrowly scoped workflow_dispatch token.
+#
+# Org secrets (restrict to the three image repos and xenomit-deployments):
+#   APP_ID — GitHub App ID for deployments dispatch
+#   APP_PRIVATE_KEY — GitHub App private key (PEM)
+name: image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: image-web-panel-main
+  cancel-in-progress: false
+
+env:
+  IMAGE: web-panel
+  REGISTRY: ghcr.io
+  IMAGE_NAME: xenomit-do/xenomit-web-panel
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: xenomit-build
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+
+      - name: Log in to GHCR
+        uses: docker/login-action@783ae9cac559640a24c9212dfa6cd9e998252f9a
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: .
+          file: ci/docker/Dockerfile.web-panel
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          provenance: true
+          sbom: true
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+        with:
+          cosign-release: v2.4.3
+
+      - name: Sign image (keyless)
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+
+      - name: Normalize digest
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${{ steps.build.outputs.digest }}"
+          hex="${raw#sha256:}"
+          hex="$(printf '%s' "$hex" | tr '[:upper:]' '[:lower:]')"
+          if ! [[ "$hex" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "unexpected digest format: $raw" >&2
+            exit 1
+          fi
+          echo "value=sha256:${hex}" >> "$GITHUB_OUTPUT"
+
+      - name: Mint deployments token
+        id: deployments-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: xenomit-do
+          repositories: xenomit-deployments
+          permission-actions: write
+
+      - name: Notify xenomit-deployments
+        env:
+          APP_TOKEN: ${{ steps.deployments-token.outputs.token }}
+          DIGEST: ${{ steps.digest.outputs.value }}
+          IMAGE: ${{ env.IMAGE }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_TOKEN"
+          payload="$(python3 -c 'import json,os; print(json.dumps({"ref":"main","inputs":{"image":os.environ["IMAGE"],"digest":os.environ["DIGEST"],"source_repository":os.environ["SOURCE_REPOSITORY"],"source_sha":os.environ["SOURCE_SHA"]}}))')"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${APP_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${{ github.api_url }}/repos/xenomit-do/xenomit-deployments/actions/workflows/promote-image.yml/dispatches" \
+            -d "$payload"
